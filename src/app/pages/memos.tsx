@@ -1,6 +1,6 @@
 // pages/memos.tsx
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
     Text,
     View,
@@ -20,8 +20,12 @@ import Animated, {
 } from "react-native-reanimated";
 import MemoListItem, { Memo } from "@/components/MemoListItem";
 import { SafeAreaView } from "react-native-safe-area-context";
+import * as FileSystem from "expo-file-system";
 
 export default function MemosScreen() {
+
+
+    
     const [recording, setRecording] = useState<Recording>();
     const [memos, setMemos] = useState<Memo[]>([]);
 
@@ -30,7 +34,7 @@ export default function MemosScreen() {
 
     async function startRecording() {
         try {
-            setAudioMetering([]);
+            setAudioMetering([]); 
 
             await Audio.requestPermissionsAsync();
             await Audio.setAudioModeAsync({
@@ -59,6 +63,31 @@ export default function MemosScreen() {
         }
     }
 
+    async function logDirectoryContents(directory: string) {
+        try {
+            // 确保目录存在，如果不存在，则创建
+            const dirInfo = await FileSystem.getInfoAsync(directory);
+            if (!dirInfo.exists) {
+                // console.log(`Directory ${directory} does not exist, creating...`);
+                await FileSystem.makeDirectoryAsync(directory, { intermediates: true });
+            }
+    
+            // 读取目录内容
+            const files = await FileSystem.readDirectoryAsync(directory);
+            // console.log(`Files in ${directory}:`, files);
+    
+            // 如果你还想获取每个文件的更详细信息，可以遍历files数组
+            for (const fileName of files) {
+                const fileInfo = await FileSystem.getInfoAsync(directory + fileName);
+                // console.log(`File Info - ${fileName}:`, fileInfo);
+            }
+        } catch (error) {
+            console.error("Failed to read directory contents:", error);
+        }
+    }
+    
+
+    
     async function stopRecording() {
         if (!recording) {
             return;
@@ -67,20 +96,57 @@ export default function MemosScreen() {
         console.log("Stopping recording..");
         setRecording(undefined);
         await recording.stopAndUnloadAsync();
-        await Audio.setAudioModeAsync({
-            allowsRecordingIOS: false,
-        });
-        const uri = recording.getURI();
+        const uri = recording.getURI(); // 获取录音文件的URI
         console.log("Recording stopped and stored at", uri);
         metering.value = -100;
+
         if (uri) {
-            const { sound } = await Audio.Sound.createAsync({ uri });
+            const directory = `${FileSystem.documentDirectory}memos/`;
+            await FileSystem.makeDirectoryAsync(directory, {
+                intermediates: true,
+            });
+            const newUri = `${directory}${Date.now()}.m4a`;
+            await FileSystem.moveAsync({
+                from: uri,
+                to: newUri,
+            });
+            console.log("File moved to", newUri);
+
+            // 更新状态以刷新列表
             setMemos((existingMemos) => [
-                { uri, metering: audioMetering },
+                { uri: newUri, metering: audioMetering },
                 ...existingMemos,
             ]);
+
+            // 读取目录内容
+            logDirectoryContents(directory);
+
         }
     }
+
+    // async function stopRecording() {
+    //     if (!recording) {
+    //         return;
+    //     }
+
+    //     console.log("Stopping recording..");
+    //     setRecording(undefined);
+    //     await recording.stopAndUnloadAsync();
+    //     await Audio.setAudioModeAsync({
+    //         allowsRecordingIOS: false,
+    //     });
+    //     const uri = recording.getURI();
+    //     console.log("Recording stopped and stored at", uri);
+    //     metering.value = -100;
+    //     if (uri) {
+    //         const { sound } = await Audio.Sound.createAsync({ uri });
+    //         setMemos((existingMemos) => [
+    //             { uri, metering: audioMetering },
+    //             ...existingMemos,
+    //         ]);
+    //     }
+    // }
+
 
     const animatedRedCircle = useAnimatedStyle(() => ({
         width: withTiming(recording ? "60%" : "100%"),

@@ -6,8 +6,8 @@
     "paths": {
       "@/*": ["src/*"],
       "@components/*": ["src/components/*"],
-      "@assets/*": ["assets/*"],
+      "@assets/*": ["assets/*"]
     },
-    "jsx": "react-jsx"
-  },
+    "jsx": "react-native",
+  }
 }
